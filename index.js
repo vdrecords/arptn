@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.7
+// @version      4.9.8
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -36,6 +36,17 @@
         DAILY_SOLVED: `daily_solved_${courseId}`,
         MESSAGES_SENT: `messages_sent_${courseId}`
     };
+
+    // Общие URL и ключи
+    const coursePageBase = `https://learn.chessking.com/learning/course/${courseId}`;
+    const tasksHashURL   = `${coursePageBase}/tasks#`;
+    const dateKey        = getTodayDateString();
+
+    // GM-ключи для текущей даты:
+    const keyInitial      = `initial_solved_${courseId}_${dateKey}`;   // initialVal
+    const keyDailyCount   = `daily_solved_${courseId}_${dateKey}`;     // сколько решено сегодня
+    const keyCachedSolved = `cached_solved_${courseId}_${dateKey}`;    // кеш: solvedToday
+    const keyCachedUnlock = `cached_unlock_${courseId}_${dateKey}`;    // кеш: unlockRemaining
 
     const enableChessAnim       = 1;    // Блок 2
     const enableChessComFilter  = 1;    // Блок 3
@@ -396,16 +407,6 @@
     // === БЛОК 1: Проверка + Редирект ===
     // ===============================
     (function() {
-        const coursePageBase = `https://learn.chessking.com/learning/course/${courseId}`;
-        const tasksHashURL   = `${coursePageBase}/tasks#`;
-        const dateKey        = getTodayDateString();
-
-        // GM-ключи для текущей даты:
-        const keyInitial      = `initial_solved_${courseId}_${dateKey}`;   // initialVal
-        const keyDailyCount   = `daily_solved_${courseId}_${dateKey}`;     // сколько решено сегодня
-        const keyCachedSolved = `cached_solved_${courseId}_${dateKey}`;    // кеш: solvedToday
-        const keyCachedUnlock = `cached_unlock_${courseId}_${dateKey}`;    // кеш: unlockRemaining
-
         const hostname   = window.location.hostname;
         const pathname   = window.location.pathname;
         // Определяем: является ли текущая страница /tasks
@@ -466,7 +467,7 @@
 
             // 1.2) GM-кеша нет → однократно fetchCourseDataViaGM(false)
             console.log("[Tracker] GM-кеша нет, выполняем fetchCourseDataViaGM(false)");
-            fetchCourseDataViaGM(false).then(data => {
+            window.fetchCourseDataViaGM(false).then(data => {
                 if (!data) {
                     console.log("[Tracker] fetch вернул null → показываем страницу");
                     if (document.body) document.body.style.visibility = '';
@@ -536,7 +537,7 @@
                 setInterval(syncCacheFromDOM, 1000);
 
                 // 2.4) Строим UI + запускаем fetchAndUpdate
-                buildUIandStartUpdates();
+                window.buildUIandStartUpdates();
             }
 
             if (document.readyState === 'interactive' || document.readyState === 'complete') {
