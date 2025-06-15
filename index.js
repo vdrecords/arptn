@@ -547,8 +547,7 @@
                         <div>До разблокировки осталось решить: <strong>${unlockRemaining}</strong></div>
                         <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
                         <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
-                        <div>Задач осталось: <strong>${remainingTasks}</strong></div>
-                        <div>До ${nextTh} решённых задач осталось: <strong>${milestoneText}</strong></div>
+                        <div>Задач осталось: <strong>${Math.max(0, totalCount - totalSolved)}</strong></div>
                     `;
                     console.log("[Tracker] UI обновлён");
                 });
@@ -887,54 +886,6 @@
 
         // Also handle media elements that might be added through other means
         setInterval(muteAllAudio, 1000);
-    })();
-
-    // ===========================================
-    // === БЛОК 7: URL-based Body Cleaner ===
-    // ===========================================
-    (function() {
-        const blocked = [
-            "youtube.com",
-            "music.youtube.com",
-            "chrome.google.com/webstore",
-            "chromewebstore.google.com",
-            "addons.mozilla.org",
-            "microsoftedge.microsoft.com/addons",
-            "opera.com/extensions",
-            "addons.opera.com",
-            "yandex.ru/extensions"
-        ];
-        function isBlocked() {
-            return blocked.some(site => location.hostname.includes(site));
-        }
-        function injectCSS() {
-            const style = document.createElement('style');
-            style.textContent = `
-                html, body { visibility: hidden !important; }
-                html::before {
-                    content: 'Страница заблокирована!';
-                    visibility: visible !important;
-                    position: fixed;
-                    top: 40%;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    color: red;
-                    font-size: 2em;
-                    text-align: center;
-                    z-index: 999999;
-                }
-            `;
-            document.documentElement.appendChild(style);
-            console.log("[URLBlock] Контент заблокирован через GM_addStyle");
-        }
-        if (isBlocked()) {
-            if (document.readyState === 'loading') {
-                document.addEventListener("DOMContentLoaded", injectCSS);
-            } else {
-                injectCSS();
-            }
-        }
     })();
 
     // === БЛОК 8: контроль отправки задач и динамическая блокировка при переключении диалогов ===
