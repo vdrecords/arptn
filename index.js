@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.2
+// @version      4.9.3
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -1006,9 +1006,20 @@
 
     // Показываем оверлей с графиком на странице курса, если есть блок с количеством задач
     (function showOverlayOnCoursePage() {
-        const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
-        if (solvedElem) {
-            buildUIandStartUpdates();
+        const hostname = window.location.hostname;
+        const pathname = window.location.pathname;
+        const isCoursePage = hostname.endsWith('learn.chessking.com') && 
+                           pathname === `/learning/course/${courseId}`;
+        
+        if (isCoursePage) {
+            console.log("[Tracker] Мы на странице курса, инициализируем UI");
+            if (document.readyState === 'interactive' || document.readyState === 'complete') {
+                buildUIandStartUpdates();
+            } else {
+                document.addEventListener('DOMContentLoaded', () => {
+                    buildUIandStartUpdates();
+                });
+            }
         }
     })();
 })();
