@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.4
+// @version      4.9.5
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -992,19 +992,29 @@
             
             // Ждём загрузки DOM и jQuery
             function initUI() {
-                if (window.jQuery && window.buildUIandStartUpdates) {
-                    console.log("[Tracker] jQuery и buildUIandStartUpdates доступны, запускаем UI");
-                    window.buildUIandStartUpdates();
-                } else {
-                    console.log("[Tracker] Ожидаем jQuery и buildUIandStartUpdates...");
+                // Проверяем наличие jQuery
+                if (typeof jQuery === 'undefined') {
+                    console.log("[Tracker] jQuery не найден, ожидаем...");
                     setTimeout(initUI, 100);
+                    return;
                 }
+
+                // Проверяем наличие buildUIandStartUpdates
+                if (typeof window.buildUIandStartUpdates !== 'function') {
+                    console.log("[Tracker] buildUIandStartUpdates не найден, ожидаем...");
+                    setTimeout(initUI, 100);
+                    return;
+                }
+
+                console.log("[Tracker] jQuery и buildUIandStartUpdates доступны, запускаем UI");
+                window.buildUIandStartUpdates();
             }
             
-            if (document.readyState === 'interactive' || document.readyState === 'complete') {
+            // Запускаем инициализацию после полной загрузки страницы
+            if (document.readyState === 'complete') {
                 initUI();
             } else {
-                document.addEventListener('DOMContentLoaded', initUI);
+                window.addEventListener('load', initUI);
             }
         }
     })();
