@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.6
+// @version      4.9.7
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -105,7 +105,7 @@
 
         function fetchAndUpdate() {
             console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
-            fetchCourseDataViaGM(true).then(data => {
+            window.fetchCourseDataViaGM(true).then(data => {
                 if (!data) {
                     console.log("[Tracker][fetchAndUpdate] fetch вернул null");
                     return;
@@ -326,6 +326,72 @@
         setInterval(fetchAndUpdate, 60000);
     };
 
+    // Делаем fetchCourseDataViaGM глобальной функцией
+    window.fetchCourseDataViaGM = function(allowInit) {
+        console.log(`[Tracker][fetchCourseDataViaGM] Запуск (allowInit=${allowInit})`);
+        return new Promise(resolve => {
+            GM_xmlhttpRequest({
+                method: 'GET',
+                url: coursePageBase,
+                onload(response) {
+                    console.log(`[Tracker][fetchCourseDataViaGM] HTTP статус: ${response.status}`);
+                    if (response.status < 200 || response.status >= 300) {
+                        console.warn(`[Tracker][fetchCourseDataViaGM] Некорректный статус: ${response.status}`);
+                        resolve(null);
+                        return;
+                    }
+                    const html = response.responseText;
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+
+                    const solvedElem = doc.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
+                    if (!solvedElem) {
+                        console.warn("[Tracker][fetchCourseDataViaGM] Элемент «Решенное» не найден");
+                        resolve(null);
+                        return;
+                    }
+                    const totalText = solvedElem.innerText.split('/')[0].trim();
+                    const totalSolved = parseInt(totalText, 10);
+                    console.log(`[Tracker][fetchCourseDataViaGM] totalSolved (с сервера) = ${totalSolved}`);
+                    if (isNaN(totalSolved)) {
+                        console.warn("[Tracker][fetchCourseDataViaGM] Не удалось распарсить totalSolved");
+                        resolve(null);
+                        return;
+                    }
+
+                    let initialVal = readGMNumber(keyInitial);
+                    let solvedToday;
+
+                    if (initialVal === null) {
+                        console.log("[Tracker][fetchCourseDataViaGM] initialVal отсутствует");
+                        if (allowInit) {
+                            initialVal = totalSolved;
+                            writeGMNumber(keyInitial, initialVal);
+                            solvedToday = 0;
+                            console.log(`[Tracker][fetchCourseDataViaGM] (tasks) initialVal = ${initialVal}, solvedToday = 0`);
+                        } else {
+                            solvedToday = 0;
+                            console.log("[Tracker][fetchCourseDataViaGM] (не /tasks) solvedToday = 0");
+                        }
+                    } else {
+                        solvedToday = Math.max(0, totalSolved - initialVal);
+                        console.log(`[Tracker][fetchCourseDataViaGM] initialVal=${initialVal}, solvedToday=${solvedToday}`);
+                    }
+
+                    writeGMNumber(keyDailyCount, solvedToday);
+                    const unlockRemaining = Math.max(minTasksPerDay - solvedToday, 0);
+                    console.log(`[Tracker][fetchCourseDataViaGM] unlockRemaining=${unlockRemaining}`);
+
+                    resolve({ totalSolved, solvedToday, unlockRemaining });
+                },
+                onerror(err) {
+                    console.error("[Tracker][fetchCourseDataViaGM] Ошибка GM_xmlhttpRequest:", err);
+                    resolve(null);
+                }
+            });
+        });
+    };
+
     // ===============================
     // === БЛОК 1: Проверка + Редирект ===
     // ===============================
@@ -377,78 +443,6 @@
 
         console.log(`[Tracker] Скрипт запустился на: ${window.location.href}`);
         console.log(`[Tracker] isTasksPage=${isTasksPage}, isOtherPage=${isOtherPage}`);
-
-        /**
-         * fetchCourseDataViaGM(allowInit)
-         *  - allowInit=true и initialVal отсутствует → initialVal=totalSolved, solvedToday=0.
-         *  - Если initialVal существует → solvedToday = totalSolved - initialVal.
-         *  - Если allowInit=false и initialVal отсутствует → solvedToday=0.
-         *  - Всегда возвращает { totalSolved, solvedToday, unlockRemaining }.
-         */
-        function fetchCourseDataViaGM(allowInit) {
-            console.log(`[Tracker][fetchCourseDataViaGM] Запуск (allowInit=${allowInit})`);
-            return new Promise(resolve => {
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: coursePageBase,
-                    onload(response) {
-                        console.log(`[Tracker][fetchCourseDataViaGM] HTTP статус: ${response.status}`);
-                        if (response.status < 200 || response.status >= 300) {
-                            console.warn(`[Tracker][fetchCourseDataViaGM] Некорректный статус: ${response.status}`);
-                            resolve(null);
-                            return;
-                        }
-                        const html = response.responseText;
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-
-                        const solvedElem = doc.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
-                        if (!solvedElem) {
-                            console.warn("[Tracker][fetchCourseDataViaGM] Элемент «Решенное» не найден");
-                            resolve(null);
-                            return;
-                        }
-                        const totalText = solvedElem.innerText.split('/')[0].trim();
-                        const totalSolved = parseInt(totalText, 10);
-                        console.log(`[Tracker][fetchCourseDataViaGM] totalSolved (с сервера) = ${totalSolved}`);
-                        if (isNaN(totalSolved)) {
-                            console.warn("[Tracker][fetchCourseDataViaGM] Не удалось распарсить totalSolved");
-                            resolve(null);
-                            return;
-                        }
-
-                        let initialVal = readGMNumber(keyInitial);
-                        let solvedToday;
-
-                        if (initialVal === null) {
-                            console.log("[Tracker][fetchCourseDataViaGM] initialVal отсутствует");
-                            if (allowInit) {
-                                initialVal = totalSolved;
-                                writeGMNumber(keyInitial, initialVal);
-                                solvedToday = 0;
-                                console.log(`[Tracker][fetchCourseDataViaGM] (tasks) initialVal = ${initialVal}, solvedToday = 0`);
-                            } else {
-                                solvedToday = 0;
-                                console.log("[Tracker][fetchCourseDataViaGM] (не /tasks) solvedToday = 0");
-                            }
-                        } else {
-                            solvedToday = Math.max(0, totalSolved - initialVal);
-                            console.log(`[Tracker][fetchCourseDataViaGM] initialVal=${initialVal}, solvedToday=${solvedToday}`);
-                        }
-
-                        writeGMNumber(keyDailyCount, solvedToday);
-                        const unlockRemaining = Math.max(minTasksPerDay - solvedToday, 0);
-                        console.log(`[Tracker][fetchCourseDataViaGM] unlockRemaining=${unlockRemaining}`);
-
-                        resolve({ totalSolved, solvedToday, unlockRemaining });
-                    },
-                    onerror(err) {
-                        console.error("[Tracker][fetchCourseDataViaGM] Ошибка GM_xmlhttpRequest:", err);
-                        resolve(null);
-                    }
-                });
-            });
-        }
 
         // --------------------------------------------
         // 1) Если НЕ /tasks: проверяем GM-кеш, иначе — fetch и кеш, затем решаем
