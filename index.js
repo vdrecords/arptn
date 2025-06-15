@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.9
+// @version      4.9.10
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -587,21 +587,15 @@
                 }
             }
 
-            if (window.jQuery) {
-                overrideJQueryAnimate();
-            } else {
-                Object.defineProperty(window, "jQuery", {
-                    configurable: true,
-                    set(val) {
-                        this._jQuery = val;
-                        overrideJQueryAnimate();
-                        return val;
-                    },
-                    get() {
-                        return this._jQuery;
-                    }
-                });
+            // Ждем загрузки jQuery
+            function waitForJQuery() {
+                if (window.jQuery) {
+                    overrideJQueryAnimate();
+                } else {
+                    setTimeout(waitForJQuery, 100);
+                }
             }
+            waitForJQuery();
 
             function isElementVisible(el) {
                 return el.offsetParent !== null;
@@ -987,15 +981,8 @@
         if (isCoursePage || isTasksPage) {
             console.log(`[Tracker] Мы на ${isTasksPage ? 'странице задач' : 'странице курса'}, инициализируем UI`);
             
-            // Ждём загрузки DOM и jQuery
+            // Ждём загрузки DOM
             function initUI() {
-                // Проверяем наличие jQuery более безопасным способом
-                if (typeof window.jQuery === 'undefined' && typeof window._jQuery === 'undefined') {
-                    console.log("[Tracker] jQuery не найден, ожидаем...");
-                    setTimeout(initUI, 100);
-                    return;
-                }
-
                 // Проверяем наличие buildUIandStartUpdates
                 if (typeof window.buildUIandStartUpdates !== 'function') {
                     console.log("[Tracker] buildUIandStartUpdates не найден, ожидаем...");
@@ -1003,7 +990,7 @@
                     return;
                 }
 
-                console.log("[Tracker] jQuery и buildUIandStartUpdates доступны, запускаем UI");
+                console.log("[Tracker] buildUIandStartUpdates доступен, запускаем UI");
                 window.buildUIandStartUpdates();
             }
             
