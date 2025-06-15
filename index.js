@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8.3
+// @version      4.8.4
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -72,6 +72,7 @@
     // Читает текущее количество решённых задач прямо из DOM /tasks
     function readSolvedCountFromDOM() {
         const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
+        console.log('[DEBUG] solvedElem:', solvedElem, solvedElem?.innerText);
         if (solvedElem) {
             const parts = solvedElem.innerText.split('/');
             if (parts[0] && parts[1]) {
@@ -83,6 +84,13 @@
                     return { solved, total };
                 }
             }
+        }
+        // Fallback: попробуем вернуть из GM
+        const fallbackTotal = readGMNumber(GM_KEYS.TOTAL_TASKS);
+        const fallbackSolved = readGMNumber(GM_KEYS.TOTAL_SOLVED);
+        if (fallbackTotal !== null && fallbackSolved !== null) {
+            console.log('[DEBUG] Fallback from GM:', fallbackSolved, fallbackTotal);
+            return { solved: fallbackSolved, total: fallbackTotal };
         }
         return null;
     }
