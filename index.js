@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8.4
+// @version      4.8.5
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -646,7 +646,9 @@
                     console.log("[Anim] MutationObserver: проверка «Следующее задание»");
                     autoClickNextButton();
                 });
-                observer.observe(document.body, { childList: true, subtree: true });
+                if (document.body) {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                }
                 autoClickNextButton();
             }
             if (document.body) {
@@ -895,10 +897,12 @@
             });
         });
 
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true
-        });
+        if (document.documentElement) {
+            observer.observe(document.documentElement, {
+                childList: true,
+                subtree: true
+            });
+        }
 
         // Also handle media elements that might be added through other means
         setInterval(muteAllAudio, 1000);
