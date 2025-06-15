@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8.2
+// @version      4.8.3
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -28,6 +28,14 @@
     // ==============================
     const courseId            = 22;     // ID курса на ChessKing
     let   minTasksPerDay      = 100;   // Минимум задач в день
+
+    // GM-ключи для хранения данных
+    const GM_KEYS = {
+        TOTAL_TASKS: `ck_total_tasks_${courseId}`,
+        TOTAL_SOLVED: `ck_total_solved_${courseId}`,
+        DAILY_SOLVED: `daily_solved_${courseId}`,
+        MESSAGES_SENT: `messages_sent_${courseId}`
+    };
 
     const enableChessAnim       = 1;    // Блок 2
     const enableChessComFilter  = 1;    // Блок 3
@@ -65,9 +73,16 @@
     function readSolvedCountFromDOM() {
         const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
         if (solvedElem) {
-            const text = solvedElem.innerText.split('/')[0].trim();
-            const n = parseInt(text, 10);
-            return isNaN(n) ? null : n;
+            const parts = solvedElem.innerText.split('/');
+            if (parts[0] && parts[1]) {
+                const solved = parseInt(parts[0].trim(), 10);
+                const total = parseInt(parts[1].trim(), 10);
+                if (!isNaN(solved) && !isNaN(total)) {
+                    writeGMNumber(GM_KEYS.TOTAL_SOLVED, solved);
+                    writeGMNumber(GM_KEYS.TOTAL_TASKS, total);
+                    return { solved, total };
+                }
+            }
         }
         return null;
     }
@@ -251,19 +266,19 @@
 
                 // 2.1) Синхронизируем кеш из DOM
                 function syncCacheFromDOM() {
-                    const domSolved = readSolvedCountFromDOM();
-                    if (domSolved === null) return;
+                    const domData = readSolvedCountFromDOM();
+                    if (!domData) return;
 
                     let initialVal = readGMNumber(keyInitial);
                     let solvedToday;
                     if (initialVal === null) {
-                        initialVal = domSolved;
+                        initialVal = domData.solved;
                         writeGMNumber(keyInitial, initialVal);
                         solvedToday = 0;
                         console.log(`[Tracker](tasks, DOM) initialVal=domSolved=${initialVal}, solvedToday=0`);
                     } else {
-                        solvedToday = Math.max(0, domSolved - initialVal);
-                        console.log(`[Tracker](tasks, DOM) initialVal=${initialVal}, domSolved=${domSolved}, solvedToday=${solvedToday}`);
+                        solvedToday = Math.max(0, domData.solved - initialVal);
+                        console.log(`[Tracker](tasks, DOM) initialVal=${initialVal}, domSolved=${domData.solved}, solvedToday=${solvedToday}`);
                     }
                     writeGMNumber(keyDailyCount, solvedToday);
                     const unlockRemaining = Math.max(minTasksPerDay - solvedToday, 0);
@@ -379,17 +394,10 @@
                     console.log(`[Tracker][fetchAndUpdate] maxPerMin=${maxPerMin}`);
 
                     // ==== Общее число задач и оставшиеся задачи ====
-                    let totalCount = 0;
-                    const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
-                    if (solvedElem) {
-                        const parts = solvedElem.innerText.split('/');
-                        if (parts[1]) {
-                            const t = parseInt(parts[1].trim(), 10);
-                            if (!isNaN(t)) totalCount = t;
-                        }
-                    }
-                    const remainingTasks = totalCount - totalSolved;
-                    console.log(`[Tracker][fetchAndUpdate] totalCount=${totalCount}, remainingTasks=${remainingTasks}`);
+                    const domData = readSolvedCountFromDOM();
+                    const totalTasks = domData ? domData.total : readGMNumber(GM_KEYS.TOTAL_TASKS) || 0;
+                    const remainingTasks = Math.max(0, totalTasks - totalSolved);
+                    console.log(`[Tracker][fetchAndUpdate] totalTasks=${totalTasks}, remainingTasks=${remainingTasks}`);
 
                     let remainingTimeText = "нет данных";
                     if (maxPerMin > 0) {
@@ -547,7 +555,7 @@
                         <div>До разблокировки осталось решить: <strong>${unlockRemaining}</strong></div>
                         <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
                         <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
-                        <div>Задач осталось: <strong>${Math.max(0, totalCount - totalSolved)}</strong></div>
+                        <div>Задач осталось: <strong>${remainingTasks}</strong></div>
                     `;
                     console.log("[Tracker] UI обновлён");
                 });
