@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Global Redirect & ChessKing Tracker & Message Control (GM-хранилище для кеша)
+// @name         ARPTn
 // @namespace    http://tampermonkey.net/
 // @version      4.8
 // @description
@@ -7,7 +7,7 @@
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
 // 3) Блок 3: Фильтр турниров Chess.com – скрыть нежелательные турниры по ключевым словам.
 // 4) Блок 4: Hide Elements – универсальное скрытие элементов через GM_addStyle.
-// 5) Блок 5: Hide Specific Tournaments and Sections – скрытие по классам/иконкам с MutationObserver.
+// 5) Блок 5: Hide Specific Tournaments and sSections – скрытие по классам/иконкам с MutationObserver.
 // 6) Блок 6: Lichess – показывать только Blitz & Rapid через GM_addStyle.
 // 7) Блок 7: URL-based Body Cleaner – заменяет содержимое body на «Страница заблокирована!».
 // 8) Блок 8: Контроль отправки сообщений – по числу решённых задач.
