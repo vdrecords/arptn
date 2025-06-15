@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.10
+// @version      4.9.11
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -12,6 +12,7 @@
 // 7) Блок 7: URL-based Body Cleaner – заменяет содержимое body на «Страница заблокирована!».
 // 8) Блок 8: Контроль отправки сообщений – по числу решённых задач.
 // 9) Блок 9: Sound Control – mute audio on all sites except lichess.org and chess.com.
+// 10) Блок 10: Time Control – контроль оставшегося времени.
 // @include      *
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
@@ -27,14 +28,16 @@
     // === Общие настройки скрипта ===
     // ==============================
     const courseId            = 22;     // ID курса на ChessKing
-    let   minTasksPerDay      = 0;   // Минимум задач в день
+    let   minTasksPerDay      = 0;      // Минимум задач в день
+    const maxTimePerDay       = 180;    // Максимальное время в минутах (3 часа)
 
     // GM-ключи для хранения данных
     const GM_KEYS = {
         TOTAL_TASKS: `ck_total_tasks_${courseId}`,
         TOTAL_SOLVED: `ck_total_solved_${courseId}`,
         DAILY_SOLVED: `daily_solved_${courseId}`,
-        MESSAGES_SENT: `messages_sent_${courseId}`
+        MESSAGES_SENT: `messages_sent_${courseId}`,
+        TIME_REMAINING: `time_remaining_${courseId}` // Новый ключ для хранения оставшегося времени
     };
 
     // Общие URL и ключи
@@ -995,6 +998,102 @@
                 window.addEventListener('load', initUI);
             }
         }
+    })();
+
+    // ===========================================
+    // === БЛОК 10: Time Control ===
+    // ===========================================
+    (function() {
+        // Проверяем и сбрасываем время в полночь
+        const savedDate = GM_getValue('ck_time_date', null);
+        if (savedDate !== dateKey) {
+            console.log(`[TimeControl] Новый день (${dateKey}) — сбрасываем время`);
+            GM_setValue('ck_time_date', dateKey);
+            GM_setValue(GM_KEYS.TIME_REMAINING, maxTimePerDay);
+        }
+
+        // Функция для форматирования времени в чч:мм
+        function formatTime(minutes) {
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+        }
+
+        // Функция для обновления title
+        function updateTitle(minutes) {
+            const timeStr = formatTime(minutes);
+            const oldTitle = document.title.replace(/^\d{2}:\d{2}\s·\s/, '');
+            document.title = `${timeStr} · ${oldTitle}`;
+        }
+
+        // Функция для создания и показа оверлея
+        function showTimeOverlay(minutes) {
+            let overlay = document.getElementById('ck-time-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'ck-time-overlay';
+                overlay.style.position = 'fixed';
+                overlay.style.top = '10px';
+                overlay.style.right = '10px';
+                overlay.style.backgroundColor = 'white';
+                overlay.style.border = '1px solid #ccc';
+                overlay.style.padding = '10px';
+                overlay.style.zIndex = 9999;
+                overlay.style.fontFamily = 'Arial, sans-serif';
+                overlay.style.fontSize = '12px';
+                overlay.style.color = '#000';
+                document.body.appendChild(overlay);
+            }
+            overlay.innerHTML = `<strong>Оставшееся время:</strong><br/>${formatTime(minutes)}`;
+        }
+
+        // Функция для очистки body
+        function clearBody() {
+            document.body.innerHTML = '';
+            document.body.style.backgroundColor = '#fff';
+            document.body.style.display = 'flex';
+            document.body.style.justifyContent = 'center';
+            document.body.style.alignItems = 'center';
+            document.body.style.height = '100vh';
+            document.body.style.margin = '0';
+            document.body.style.fontFamily = 'Arial, sans-serif';
+            document.body.style.fontSize = '24px';
+            document.body.style.color = '#000';
+            document.body.textContent = 'Время истекло!';
+        }
+
+        // Основная функция контроля времени
+        function controlTime() {
+            let remainingTime = readGMNumber(GM_KEYS.TIME_REMAINING);
+            if (remainingTime === null) {
+                remainingTime = maxTimePerDay;
+                writeGMNumber(GM_KEYS.TIME_REMAINING, remainingTime);
+            }
+
+            // Обновляем title
+            updateTitle(remainingTime);
+
+            // Проверяем, нужно ли показать оверлей (за 15 минут до конца)
+            if (remainingTime <= 15) {
+                showTimeOverlay(remainingTime);
+            }
+
+            // Если время истекло, очищаем body
+            if (remainingTime <= 0) {
+                clearBody();
+                return;
+            }
+
+            // Уменьшаем оставшееся время
+            remainingTime--;
+            writeGMNumber(GM_KEYS.TIME_REMAINING, remainingTime);
+
+            // Запускаем следующий тик через минуту
+            setTimeout(controlTime, 60000);
+        }
+
+        // Запускаем контроль времени
+        controlTime();
     })();
 })();
 
