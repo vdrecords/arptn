@@ -1010,6 +1010,7 @@
             console.log(`[TimeControl] Новый день (${dateKey}) — сбрасываем время`);
             GM_setValue('ck_time_date', dateKey);
             GM_setValue(GM_KEYS.TIME_REMAINING, maxTimePerDay);
+            GM_setValue('ck_time_start', Date.now());
         }
 
         // Функция для форматирования времени в чч:мм
@@ -1064,11 +1065,21 @@
 
         // Основная функция контроля времени
         function controlTime() {
-            let remainingTime = readGMNumber(GM_KEYS.TIME_REMAINING);
-            if (remainingTime === null) {
-                remainingTime = maxTimePerDay;
-                writeGMNumber(GM_KEYS.TIME_REMAINING, remainingTime);
+            // Получаем время начала дня
+            let startTime = GM_getValue('ck_time_start', null);
+            if (startTime === null) {
+                startTime = Date.now();
+                GM_setValue('ck_time_start', startTime);
             }
+
+            // Вычисляем прошедшее время в минутах
+            const elapsedMinutes = Math.floor((Date.now() - startTime) / (60 * 1000));
+            
+            // Вычисляем оставшееся время
+            let remainingTime = Math.max(0, maxTimePerDay - elapsedMinutes);
+            
+            // Сохраняем оставшееся время
+            writeGMNumber(GM_KEYS.TIME_REMAINING, remainingTime);
 
             // Обновляем title
             updateTitle(remainingTime);
@@ -1083,10 +1094,6 @@
                 clearBody();
                 return;
             }
-
-            // Уменьшаем оставшееся время
-            remainingTime--;
-            writeGMNumber(GM_KEYS.TIME_REMAINING, remainingTime);
 
             // Запускаем следующий тик через минуту
             setTimeout(controlTime, 60000);
