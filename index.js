@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.8
+// @version      4.9.9
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -989,8 +989,8 @@
             
             // Ждём загрузки DOM и jQuery
             function initUI() {
-                // Проверяем наличие jQuery
-                if (typeof jQuery === 'undefined') {
+                // Проверяем наличие jQuery более безопасным способом
+                if (typeof window.jQuery === 'undefined' && typeof window._jQuery === 'undefined') {
                     console.log("[Tracker] jQuery не найден, ожидаем...");
                     setTimeout(initUI, 100);
                     return;
@@ -1007,11 +1007,23 @@
                 window.buildUIandStartUpdates();
             }
             
-            // Запускаем инициализацию после полной загрузки страницы
+            // Запускаем инициализацию в зависимости от состояния загрузки страницы
             if (document.readyState === 'complete') {
+                console.log("[Tracker] Страница уже загружена, запускаем initUI");
+                initUI();
+            } else if (document.readyState === 'interactive') {
+                console.log("[Tracker] DOM загружен, но ресурсы еще загружаются, запускаем initUI");
                 initUI();
             } else {
-                window.addEventListener('load', initUI);
+                console.log("[Tracker] Ждем загрузки DOM");
+                document.addEventListener('DOMContentLoaded', () => {
+                    console.log("[Tracker] DOMContentLoaded сработал, запускаем initUI");
+                    initUI();
+                });
+                window.addEventListener('load', () => {
+                    console.log("[Tracker] load сработал, запускаем initUI");
+                    initUI();
+                });
             }
         }
     })();
