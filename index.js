@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8.8
+// @version      4.9.1
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -311,6 +311,9 @@
                 // 2.3) Запускаем каждую секунду проверку DOM → синхронизируем кеш
                 console.log("[Tracker] Запускаем интервал каждые 1 сек для синхронизации кеша из DOM");
                 setInterval(syncCacheFromDOM, 1000);
+
+                // 2.4) Строим UI + запускаем fetchAndUpdate
+                buildUIandStartUpdates();
             }
 
             if (document.readyState === 'interactive' || document.readyState === 'complete') {
@@ -320,274 +323,259 @@
             }
         }
 
-        // === Показывать график и на странице курса, если есть блок с количеством задач ===
-        function tryShowProgressOverlayAnywhere() {
-            // Проверяем, есть ли блок с количеством задач
-            const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
-            if (solvedElem && !document.getElementById('ck-progress-overlay')) {
-                buildUIandStartUpdates();
-            }
-        }
-        // На всех страницах пробуем показать график (в том числе на /learning/course/22)
-        if (document.readyState === 'interactive' || document.readyState === 'complete') {
-            tryShowProgressOverlayAnywhere();
-        } else {
-            window.addEventListener('DOMContentLoaded', tryShowProgressOverlayAnywhere);
-        }
-    })();
+        // =================================
+        // === ФУНКЦИЯ: buildUIandStartUpdates ===
+        // =================================
+        function buildUIandStartUpdates() {
+            console.log("[Tracker] buildUIandStartUpdates: строим UI и запускаем fetchAndUpdate()");
 
-    // =================================
-    // === ФУНКЦИЯ: buildUIandStartUpdates ===
-    // =================================
-    function buildUIandStartUpdates() {
-        console.log("[Tracker] buildUIandStartUpdates: строим UI и запускаем fetchAndUpdate()");
-
-        function fetchAndUpdate() {
-            console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
-            fetchCourseDataViaGM(true).then(data => {
-                if (!data) {
-                    console.log("[Tracker][fetchAndUpdate] fetch вернул null");
-                    return;
-                }
-                const { totalSolved, solvedToday, unlockRemaining } = data;
-
-                // Обновляем кеш (fetch-based)
-                writeGMNumber(keyCachedSolved, solvedToday);
-                writeGMNumber(keyCachedUnlock, unlockRemaining);
-                console.log(`[Tracker][fetchAndUpdate] Фетч: totalSolved=${totalSolved}, solvedToday=${solvedToday}, unlockRemaining=${unlockRemaining}`);
-
-                // ==== Обновляем <title> ====
-                const oldTitle = document.title.replace(/^\d+\s·\s/, '');
-                document.title = `${unlockRemaining} · ${oldTitle}`;
-                console.log(`[Tracker][fetchAndUpdate] Обновлён title: "${document.title}"`);
-
-                // ==== История totalSolved для графика ====
-                let readings = [];
-                try {
-                    readings = JSON.parse(localStorage.getItem('ck_readings') || '[]');
-                } catch {
-                    readings = [];
-                }
-                readings.push({ time: new Date().toISOString(), solved: totalSolved });
-                if (readings.length > 60) readings = readings.slice(-60);
-                localStorage.setItem('ck_readings', JSON.stringify(readings));
-                console.log(`[Tracker][fetchAndUpdate] Добавили чтение: time=${readings.slice(-1)[0].time}, solved=${readings.slice(-1)[0].solved}`);
-
-                // ==== Вычисляем diffs (интервал ≤ 90 сек) ====
-                const diffs = [];
-                for (let i = 1; i < readings.length; i++) {
-                    const t0 = new Date(readings[i - 1].time).getTime();
-                    const t1 = new Date(readings[i].time).getTime();
-                    if (t1 - t0 <= 90000) {
-                        diffs.push(readings[i].solved - readings[i - 1].solved);
+            function fetchAndUpdate() {
+                console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
+                fetchCourseDataViaGM(true).then(data => {
+                    if (!data) {
+                        console.log("[Tracker][fetchAndUpdate] fetch вернул null");
+                        return;
                     }
-                }
-                console.log(`[Tracker][fetchAndUpdate] diffs (последние 5): ${diffs.slice(-5)}`);
-                const graphDiffs = diffs.length > 30 ? diffs.slice(-30) : diffs;
+                    const { totalSolved, solvedToday, unlockRemaining } = data;
 
-                // ==== Средняя скорость (медиана последних 10, без подряд 0) ====
-                let lastTen = diffs.length > 10 ? diffs.slice(-10) : diffs;
-                const filtered = [];
-                for (let i = 0; i < lastTen.length; i++) {
-                    if (lastTen[i] === 0 && i > 0 && lastTen[i - 1] === 0) continue;
-                    filtered.push(lastTen[i]);
-                }
-                if (filtered.length === 0) filtered.push(...lastTen);
+                    // Обновляем кеш (fetch-based)
+                    writeGMNumber(keyCachedSolved, solvedToday);
+                    writeGMNumber(keyCachedUnlock, unlockRemaining);
+                    console.log(`[Tracker][fetchAndUpdate] Фетч: totalSolved=${totalSolved}, solvedToday=${solvedToday}, unlockRemaining=${unlockRemaining}`);
 
-                let avgPerMin = 0;
-                if (filtered.length) {
-                    const sorted = [...filtered].sort((a, b) => a - b);
-                    const mid = Math.floor(sorted.length / 2);
-                    avgPerMin = (sorted.length % 2)
-                        ? sorted[mid]
-                        : (sorted[mid - 1] + sorted[mid]) / 2;
-                    avgPerMin = Math.round(avgPerMin);
-                }
-                console.log(`[Tracker][fetchAndUpdate] avgPerMin=${avgPerMin}`);
+                    // ==== Обновляем <title> ====
+                    const oldTitle = document.title.replace(/^\d+\s·\s/, '');
+                    document.title = `${unlockRemaining} · ${oldTitle}`;
+                    console.log(`[Tracker][fetchAndUpdate] Обновлён title: "${document.title}"`);
 
-                // ==== Максимальная скорость (из положительных > avgPerMin) ====
-                const positives = lastTen.filter(x => x > 0);
-                const candidateMax = positives.filter(x => x > avgPerMin);
-                let maxPerMin = 0;
-                if (candidateMax.length) {
-                    maxPerMin = Math.max(...candidateMax);
-                } else if (positives.length) {
-                    maxPerMin = Math.max(...positives);
-                }
-                console.log(`[Tracker][fetchAndUpdate] maxPerMin=${maxPerMin}`);
+                    // ==== История totalSolved для графика ====
+                    let readings = [];
+                    try {
+                        readings = JSON.parse(localStorage.getItem('ck_readings') || '[]');
+                    } catch {
+                        readings = [];
+                    }
+                    readings.push({ time: new Date().toISOString(), solved: totalSolved });
+                    if (readings.length > 60) readings = readings.slice(-60);
+                    localStorage.setItem('ck_readings', JSON.stringify(readings));
+                    console.log(`[Tracker][fetchAndUpdate] Добавили чтение: time=${readings.slice(-1)[0].time}, solved=${readings.slice(-1)[0].solved}`);
 
-                // ==== Общее число задач и оставшиеся задачи ====
-                const domData = readSolvedCountFromDOM();
-                const totalTasks = domData ? domData.total : readGMNumber(GM_KEYS.TOTAL_TASKS) || 0;
-                const remainingTasks = Math.max(0, totalTasks - totalSolved);
-                console.log(`[Tracker][fetchAndUpdate] totalTasks=${totalTasks}, remainingTasks=${remainingTasks}`);
-
-                let remainingTimeText = "нет данных";
-                if (maxPerMin > 0) {
-                    const minsLeft = remainingTasks / maxPerMin;
-                    const h = Math.floor(minsLeft / 60);
-                    const m = Math.round(minsLeft % 60);
-                    remainingTimeText = `${h} ч ${m} мин`;
-                }
-                console.log(`[Tracker][fetchAndUpdate] remainingTimeText="${remainingTimeText}"`);
-
-                const nextTh = Math.ceil(totalSolved / 1000) * 1000;
-                const toNext = nextTh - totalSolved;
-                let milestoneText = "нет данных";
-                if (maxPerMin > 0) {
-                    const m2 = toNext / maxPerMin;
-                    const h2 = Math.floor(m2 / 60);
-                    const m3 = Math.round(m2 % 60);
-                    milestoneText = `${h2} ч ${m3} мин`;
-                }
-                console.log(`[Tracker][fetchAndUpdate] milestoneText="${milestoneText}"`);
-
-                // =====================================
-                // === Рисуем overlay с графиком и метриками ===
-                // =====================================
-                let overlay = document.getElementById('ck-progress-overlay');
-                if (!overlay) {
-                    overlay = document.createElement('div');
-                    overlay.id = 'ck-progress-overlay';
-                    overlay.style.position = 'fixed';
-                    overlay.style.top = '10px';
-                    overlay.style.right = '10px';
-                    overlay.style.backgroundColor = 'white';
-                    overlay.style.border = '1px solid #ccc';
-                    overlay.style.padding = '10px';
-                    overlay.style.zIndex = 9999;
-                    overlay.style.fontFamily = 'Arial, sans-serif';
-                    overlay.style.fontSize = '12px';
-                    overlay.style.color = '#000';
-                    overlay.innerHTML = '<strong>Прогресс задач&nbsp;(разница за минуту)</strong><br/>';
-
-                    const contentDiv = document.createElement('div');
-                    contentDiv.id = 'ck-progress-content';
-
-                    const canvas = document.createElement('canvas');
-                    canvas.id = 'ck-progress-canvas';
-                    canvas.width = 400;
-                    canvas.height = 150;
-                    contentDiv.appendChild(canvas);
-
-                    const metricsDiv = document.createElement('div');
-                    metricsDiv.id = 'ck-progress-metrics';
-                    metricsDiv.style.marginTop = '0px';
-                    contentDiv.appendChild(metricsDiv);
-
-                    overlay.appendChild(contentDiv);
-                    document.body.appendChild(overlay);
-
-                    const toggleBtn = document.createElement('button');
-                    toggleBtn.id = 'ck-toggle-btn';
-                    toggleBtn.textContent = 'Свернуть';
-                    toggleBtn.style.position = 'absolute';
-                    toggleBtn.style.top = '2px';
-                    toggleBtn.style.right = '2px';
-                    toggleBtn.style.fontSize = '10px';
-                    toggleBtn.style.padding = '2px 5px';
-                    overlay.appendChild(toggleBtn);
-                    toggleBtn.addEventListener('click', () => {
-                        const cd = document.getElementById('ck-progress-content');
-                        if (cd.style.display === 'none') {
-                            cd.style.display = 'block';
-                            toggleBtn.textContent = 'Свернуть';
-                        } else {
-                            cd.style.display = 'none';
-                            toggleBtn.textContent = 'Развернуть';
+                    // ==== Вычисляем diffs (интервал ≤ 90 сек) ====
+                    const diffs = [];
+                    for (let i = 1; i < readings.length; i++) {
+                        const t0 = new Date(readings[i - 1].time).getTime();
+                        const t1 = new Date(readings[i].time).getTime();
+                        if (t1 - t0 <= 90000) {
+                            diffs.push(readings[i].solved - readings[i - 1].solved);
                         }
-                    });
-                    console.log("[Tracker] Overlay создан");
-                } else {
-                    let toggleBtn = document.getElementById('ck-toggle-btn');
-                    if (!toggleBtn) {
-                        const newBtn = document.createElement('button');
-                        newBtn.id = 'ck-toggle-btn';
-                        newBtn.textContent = 'Свернуть';
-                        newBtn.style.position = 'absolute';
-                        newBtn.style.top = '2px';
-                        newBtn.style.right = '2px';
-                        newBtn.style.fontSize = '10px';
-                        newBtn.style.padding = '2px 5px';
-                        overlay.appendChild(newBtn);
-                        newBtn.addEventListener('click', () => {
+                    }
+                    console.log(`[Tracker][fetchAndUpdate] diffs (последние 5): ${diffs.slice(-5)}`);
+                    const graphDiffs = diffs.length > 30 ? diffs.slice(-30) : diffs;
+
+                    // ==== Средняя скорость (медиана последних 10, без подряд 0) ====
+                    let lastTen = diffs.length > 10 ? diffs.slice(-10) : diffs;
+                    const filtered = [];
+                    for (let i = 0; i < lastTen.length; i++) {
+                        if (lastTen[i] === 0 && i > 0 && lastTen[i - 1] === 0) continue;
+                        filtered.push(lastTen[i]);
+                    }
+                    if (filtered.length === 0) filtered.push(...lastTen);
+
+                    let avgPerMin = 0;
+                    if (filtered.length) {
+                        const sorted = [...filtered].sort((a, b) => a - b);
+                        const mid = Math.floor(sorted.length / 2);
+                        avgPerMin = (sorted.length % 2)
+                            ? sorted[mid]
+                            : (sorted[mid - 1] + sorted[mid]) / 2;
+                        avgPerMin = Math.round(avgPerMin);
+                    }
+                    console.log(`[Tracker][fetchAndUpdate] avgPerMin=${avgPerMin}`);
+
+                    // ==== Максимальная скорость (из положительных > avgPerMin) ====
+                    const positives = lastTen.filter(x => x > 0);
+                    const candidateMax = positives.filter(x => x > avgPerMin);
+                    let maxPerMin = 0;
+                    if (candidateMax.length) {
+                        maxPerMin = Math.max(...candidateMax);
+                    } else if (positives.length) {
+                        maxPerMin = Math.max(...positives);
+                    }
+                    console.log(`[Tracker][fetchAndUpdate] maxPerMin=${maxPerMin}`);
+
+                    // ==== Общее число задач и оставшиеся задачи ====
+                    const domData = readSolvedCountFromDOM();
+                    const totalTasks = domData ? domData.total : readGMNumber(GM_KEYS.TOTAL_TASKS) || 0;
+                    const remainingTasks = Math.max(0, totalTasks - totalSolved);
+                    console.log(`[Tracker][fetchAndUpdate] totalTasks=${totalTasks}, remainingTasks=${remainingTasks}`);
+
+                    let remainingTimeText = "нет данных";
+                    if (maxPerMin > 0) {
+                        const minsLeft = remainingTasks / maxPerMin;
+                        const h = Math.floor(minsLeft / 60);
+                        const m = Math.round(minsLeft % 60);
+                        remainingTimeText = `${h} ч ${m} мин`;
+                    }
+                    console.log(`[Tracker][fetchAndUpdate] remainingTimeText="${remainingTimeText}"`);
+
+                    const nextTh = Math.ceil(totalSolved / 1000) * 1000;
+                    const toNext = nextTh - totalSolved;
+                    let milestoneText = "нет данных";
+                    if (maxPerMin > 0) {
+                        const m2 = toNext / maxPerMin;
+                        const h2 = Math.floor(m2 / 60);
+                        const m3 = Math.round(m2 % 60);
+                        milestoneText = `${h2} ч ${m3} мин`;
+                    }
+                    console.log(`[Tracker][fetchAndUpdate] milestoneText="${milestoneText}"`);
+
+                    // =====================================
+                    // === Рисуем overlay с графиком и метриками ===
+                    // =====================================
+                    let overlay = document.getElementById('ck-progress-overlay');
+                    if (!overlay) {
+                        overlay = document.createElement('div');
+                        overlay.id = 'ck-progress-overlay';
+                        overlay.style.position = 'fixed';
+                        overlay.style.top = '10px';
+                        overlay.style.right = '10px';
+                        overlay.style.backgroundColor = 'white';
+                        overlay.style.border = '1px solid #ccc';
+                        overlay.style.padding = '10px';
+                        overlay.style.zIndex = 9999;
+                        overlay.style.fontFamily = 'Arial, sans-serif';
+                        overlay.style.fontSize = '12px';
+                        overlay.style.color = '#000';
+                        overlay.innerHTML = '<strong>Прогресс задач&nbsp;(разница за минуту)</strong><br/>';
+
+                        const contentDiv = document.createElement('div');
+                        contentDiv.id = 'ck-progress-content';
+
+                        const canvas = document.createElement('canvas');
+                        canvas.id = 'ck-progress-canvas';
+                        canvas.width = 400;
+                        canvas.height = 150;
+                        contentDiv.appendChild(canvas);
+
+                        const metricsDiv = document.createElement('div');
+                        metricsDiv.id = 'ck-progress-metrics';
+                        metricsDiv.style.marginTop = '0px';
+                        contentDiv.appendChild(metricsDiv);
+
+                        overlay.appendChild(contentDiv);
+                        document.body.appendChild(overlay);
+
+                        const toggleBtn = document.createElement('button');
+                        toggleBtn.id = 'ck-toggle-btn';
+                        toggleBtn.textContent = 'Свернуть';
+                        toggleBtn.style.position = 'absolute';
+                        toggleBtn.style.top = '2px';
+                        toggleBtn.style.right = '2px';
+                        toggleBtn.style.fontSize = '10px';
+                        toggleBtn.style.padding = '2px 5px';
+                        overlay.appendChild(toggleBtn);
+                        toggleBtn.addEventListener('click', () => {
                             const cd = document.getElementById('ck-progress-content');
                             if (cd.style.display === 'none') {
                                 cd.style.display = 'block';
-                                newBtn.textContent = 'Свернуть';
+                                toggleBtn.textContent = 'Свернуть';
                             } else {
                                 cd.style.display = 'none';
-                                newBtn.textContent = 'Развернуть';
+                                toggleBtn.textContent = 'Развернуть';
                             }
                         });
-                        console.log("[Tracker] Toggle-кнопка добавлена");
+                        console.log("[Tracker] Overlay создан");
+                    } else {
+                        let toggleBtn = document.getElementById('ck-toggle-btn');
+                        if (!toggleBtn) {
+                            const newBtn = document.createElement('button');
+                            newBtn.id = 'ck-toggle-btn';
+                            newBtn.textContent = 'Свернуть';
+                            newBtn.style.position = 'absolute';
+                            newBtn.style.top = '2px';
+                            newBtn.style.right = '2px';
+                            newBtn.style.fontSize = '10px';
+                            newBtn.style.padding = '2px 5px';
+                            overlay.appendChild(newBtn);
+                            newBtn.addEventListener('click', () => {
+                                const cd = document.getElementById('ck-progress-content');
+                                if (cd.style.display === 'none') {
+                                    cd.style.display = 'block';
+                                    newBtn.textContent = 'Свернуть';
+                                } else {
+                                    cd.style.display = 'none';
+                                    newBtn.textContent = 'Развернуть';
+                                }
+                            });
+                            console.log("[Tracker] Toggle-кнопка добавлена");
+                        }
                     }
-                }
 
-                // Рисуем график
-                const canvas = document.getElementById('ck-progress-canvas');
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    // Рисуем график
+                    const canvas = document.getElementById('ck-progress-canvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                const margin = 30;
-                const graphW  = canvas.width - margin * 2;
-                const graphH  = canvas.height - margin * 2;
-                const maxDiff = Math.max(...graphDiffs, 1);
+                    const margin = 30;
+                    const graphW  = canvas.width - margin * 2;
+                    const graphH  = canvas.height - margin * 2;
+                    const maxDiff = Math.max(...graphDiffs, 1);
 
-                // Горизонтальная ось
-                ctx.beginPath();
-                ctx.moveTo(margin, canvas.height - margin);
-                ctx.lineTo(canvas.width - margin, canvas.height - margin);
-                ctx.strokeStyle = '#000';
-                ctx.stroke();
-
-                if (graphDiffs.length) {
-                    const step = graphDiffs.length > 1 ? graphW / (graphDiffs.length - 1) : graphW;
-                    const pts = [];
-                    for (let i = 0; i < graphDiffs.length; i++) {
-                        const x = margin + i * step;
-                        const y = canvas.height - margin - (graphDiffs[i] / maxDiff) * graphH;
-                        pts.push({ x, y, v: graphDiffs[i] });
-                    }
+                    // Горизонтальная ось
                     ctx.beginPath();
-                    ctx.moveTo(pts[0].x, pts[0].y);
-                    for (let i = 1; i < pts.length; i++) {
-                        ctx.lineTo(pts[i].x, pts[i].y);
-                    }
-                    ctx.strokeStyle = 'blue';
+                    ctx.moveTo(margin, canvas.height - margin);
+                    ctx.lineTo(canvas.width - margin, canvas.height - margin);
+                    ctx.strokeStyle = '#000';
                     ctx.stroke();
 
-                    ctx.font = "10px Arial";
-                    for (const p of pts) {
-                        ctx.fillStyle = 'red';
+                    if (graphDiffs.length) {
+                        const step = graphDiffs.length > 1 ? graphW / (graphDiffs.length - 1) : graphW;
+                        const pts = [];
+                        for (let i = 0; i < graphDiffs.length; i++) {
+                            const x = margin + i * step;
+                            const y = canvas.height - margin - (graphDiffs[i] / maxDiff) * graphH;
+                            pts.push({ x, y, v: graphDiffs[i] });
+                        }
                         ctx.beginPath();
-                        ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
-                        ctx.fill();
-                        ctx.fillStyle = 'black';
-                        ctx.fillText(p.v, p.x - 5, p.y - 5);
-                    }
-                } else {
-                    ctx.font = "14px Arial";
-                    ctx.fillText("Недостаточно данных", margin, margin + 20);
-                }
+                        ctx.moveTo(pts[0].x, pts[0].y);
+                        for (let i = 1; i < pts.length; i++) {
+                            ctx.lineTo(pts[i].x, pts[i].y);
+                        }
+                        ctx.strokeStyle = 'blue';
+                        ctx.stroke();
 
-                // Обновляем метрики
-                const metricsDiv = document.getElementById('ck-progress-metrics');
-                metricsDiv.innerHTML = `
-                    <div>Решено задач сегодня: <strong>${solvedToday}</strong></div>
-                    <div>До разблокировки осталось решить: <strong>${unlockRemaining}</strong></div>
-                    <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
-                    <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
-                    <div>Задач осталось: <strong>${remainingTasks}</strong></div>
-                `;
-                console.log("[Tracker] UI обновлён");
+                        ctx.font = "10px Arial";
+                        for (const p of pts) {
+                            ctx.fillStyle = 'red';
+                            ctx.beginPath();
+                            ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+                            ctx.fill();
+                            ctx.fillStyle = 'black';
+                            ctx.fillText(p.v, p.x - 5, p.y - 5);
+                        }
+                    } else {
+                        ctx.font = "14px Arial";
+                        ctx.fillText("Недостаточно данных", margin, margin + 20);
+                    }
+
+                    // Обновляем метрики
+                    const metricsDiv = document.getElementById('ck-progress-metrics');
+                    metricsDiv.innerHTML = `
+                        <div>Решено задач сегодня: <strong>${solvedToday}</strong></div>
+                        <div>До разблокировки осталось решить: <strong>${unlockRemaining}</strong></div>
+                        <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
+                        <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
+                        <div>Задач осталось: <strong>${remainingTasks}</strong></div>
+                    `;
+                    console.log("[Tracker] UI обновлён");
+                });
             }
 
             // Запускаем fetchAndUpdate сразу и затем по таймеру
-            fetchAndUpdate()
+            fetchAndUpdate();
             setInterval(fetchAndUpdate, 60000);
         }
-    }
+    })();
 
     // =========================================
     // === БЛОК 2: Мгновенные анимации ChessKing ===
