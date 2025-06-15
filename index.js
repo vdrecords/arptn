@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8
+// @version      4.8.1
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -11,6 +11,7 @@
 // 6) Блок 6: Lichess – показывать только Blitz & Rapid через GM_addStyle.
 // 7) Блок 7: URL-based Body Cleaner – заменяет содержимое body на «Страница заблокирована!».
 // 8) Блок 8: Контроль отправки сообщений – по числу решённых задач.
+// 9) Блок 9: Sound Control – mute audio on all sites except lichess.org and chess.com.
 // @include      *
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
@@ -33,7 +34,6 @@
     const enableHideElements    = 1;    // Блок 4
     const enableHideTournaments = 1;    // Блок 5
     const enableLichessFilter   = 1;    // Блок 6
-    const enableURLBlock        = 1;    // Блок 7
     const enableMessageControl  = 1;    // Блок 8: контроль отправки сообщений
     const tasksPerMessage       = 50;  // Количество решённых задач для 1 сообщения
 
@@ -800,146 +800,236 @@
     // ===========================================
     // === БЛОК 7: URL-based Body Cleaner ===
     // ===========================================
-    if (enableURLBlock) {
-        (function() {
-            const blocked = [
-                "youtube.com",
-                "music.youtube.com",
-                "chrome.google.com/webstore",
-                "chromewebstore.google.com",
-                "addons.mozilla.org",
-                "microsoftedge.microsoft.com/addons",
-                "opera.com/extensions",
-                "addons.opera.com",
-                "yandex.ru/extensions"
-            ];
-            function isBlocked() {
-                return blocked.some(site => location.hostname.includes(site));
-            }
-            function injectCSS() {
-                const style = document.createElement('style');
-                style.textContent = `
-                    html, body { visibility: hidden !important; }
-                    html::before {
-                        content: 'Страница заблокирована!';
-                        visibility: visible !important;
-                        position: fixed;
-                        top: 40%;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        color: red;
-                        font-size: 2em;
-                        text-align: center;
-                        z-index: 999999;
-                    }
-                `;
-                document.documentElement.appendChild(style);
-                console.log("[URLBlock] Контент заблокирован через GM_addStyle");
-            }
-            if (isBlocked()) {
-                if (document.readyState === 'loading') {
-                    document.addEventListener("DOMContentLoaded", injectCSS);
-                } else {
-                    injectCSS();
+    (function() {
+        const blocked = [
+            "youtube.com",
+            "music.youtube.com",
+            "chrome.google.com/webstore",
+            "chromewebstore.google.com",
+            "addons.mozilla.org",
+            "microsoftedge.microsoft.com/addons",
+            "opera.com/extensions",
+            "addons.opera.com",
+            "yandex.ru/extensions"
+        ];
+        function isBlocked() {
+            return blocked.some(site => location.hostname.includes(site));
+        }
+        function injectCSS() {
+            const style = document.createElement('style');
+            style.textContent = `
+                html, body { visibility: hidden !important; }
+                html::before {
+                    content: 'Страница заблокирована!';
+                    visibility: visible !important;
+                    position: fixed;
+                    top: 40%;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    color: red;
+                    font-size: 2em;
+                    text-align: center;
+                    z-index: 999999;
                 }
+            `;
+            document.documentElement.appendChild(style);
+            console.log("[URLBlock] Контент заблокирован через GM_addStyle");
+        }
+        if (isBlocked()) {
+            if (document.readyState === 'loading') {
+                document.addEventListener("DOMContentLoaded", injectCSS);
+            } else {
+                injectCSS();
             }
+        }
+    })();
+
+    // ===========================================
+    // === БЛОК 9: Sound Control ===
+    // ===========================================
+    (function() {
+        function isAllowedSite() {
+            const hostname = location.hostname;
+            return hostname.endsWith('lichess.org') || hostname.endsWith('chess.com');
+        }
+
+        function muteAllAudio() {
+            if (!isAllowedSite()) {
+                document.querySelectorAll('audio, video').forEach(media => {
+                    media.muted = true;
+                    media.volume = 0;
+                });
+            }
+        }
+
+        // Initial mute
+        muteAllAudio();
+
+        // Set up observer for dynamically added media elements
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeName === 'AUDIO' || node.nodeName === 'VIDEO') {
+                        if (!isAllowedSite()) {
+                            node.muted = true;
+                            node.volume = 0;
+                        }
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true
+        });
+
+        // Also handle media elements that might be added through other means
+        setInterval(muteAllAudio, 1000);
+    })();
+
+    // ===========================================
+    // === БЛОК 7: URL-based Body Cleaner ===
+    // ===========================================
+    (function() {
+        const blocked = [
+            "youtube.com",
+            "music.youtube.com",
+            "chrome.google.com/webstore",
+            "chromewebstore.google.com",
+            "addons.mozilla.org",
+            "microsoftedge.microsoft.com/addons",
+            "opera.com/extensions",
+            "addons.opera.com",
+            "yandex.ru/extensions"
+        ];
+        function isBlocked() {
+            return blocked.some(site => location.hostname.includes(site));
+        }
+        function injectCSS() {
+            const style = document.createElement('style');
+            style.textContent = `
+                html, body { visibility: hidden !important; }
+                html::before {
+                    content: 'Страница заблокирована!';
+                    visibility: visible !important;
+                    position: fixed;
+                    top: 40%;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    color: red;
+                    font-size: 2em;
+                    text-align: center;
+                    z-index: 999999;
+                }
+            `;
+            document.documentElement.appendChild(style);
+            console.log("[URLBlock] Контент заблокирован через GM_addStyle");
+        }
+        if (isBlocked()) {
+            if (document.readyState === 'loading') {
+                document.addEventListener("DOMContentLoaded", injectCSS);
+            } else {
+                injectCSS();
+            }
+        }
+    })();
+
+    // === БЛОК 8: контроль отправки задач и динамическая блокировка при переключении диалогов ===
+    if (enableMessageControl) {
+        (function() {
+            // 0) URL-гвард: отработаем только на нужных страницах
+            const path   = location.pathname;
+            const isInbox = path.startsWith('/inbox/');
+            const isForum = /^\/forum\/team-[^\/]+\/[^\/]+/.test(path);
+            if (!isInbox && !isForum) return;
+
+            // 1) GM-ключи
+            const dateKey         = getTodayDateString();
+            const keyDailyCount   = `daily_solved_${courseId}_${dateKey}`;
+            const keyMessageCount = `messages_sent_${courseId}_${dateKey}`;
+            const tasksPerMsg     = tasksPerMessage;
+            if (readGMNumber(keyMessageCount) === null) {
+                writeGMNumber(keyMessageCount, 0);
+            }
+
+            // 2) Подсчёт
+            function getCounts() {
+                const solved    = readGMNumber(keyDailyCount)   || 0;
+                const sent      = readGMNumber(keyMessageCount) || 0;
+                const allowed   = Math.floor(solved / tasksPerMsg);
+                const remaining = allowed - sent;
+                return { solved, allowed, sent, remaining };
+            }
+
+            // 3) Инициализация формы
+            function initFormControl(form) {
+                if (!form || form.dataset.msgCtrlInit) return;
+                const ta  = form.querySelector('textarea');
+                const btn = form.querySelector('button[type="submit"]');
+                if (!ta || !btn) return;
+
+                // создаём индикатор рядом с textarea
+                const info = document.createElement('div');
+                info.style.cssText = 'font-size:12px;color:#c00;margin-top:4px;margin-left:4px;';
+                ta.parentNode.insertBefore(info, ta.nextSibling);
+
+                // обновление состояния
+                function refresh() {
+                    const { solved, allowed, sent, remaining } = getCounts();
+                    const tasksToNext = tasksPerMsg - (solved % tasksPerMsg);
+                    ta.disabled  = remaining <= 0;
+                    btn.disabled = remaining <= 0;
+                    info.textContent = remaining > 0
+                        ? `Доступно ${remaining}/${allowed} сообщений`
+                        : `Доступно 0. Решите ещё ${tasksToNext} задач`;
+                }
+                refresh();
+
+                // блокировка сабмита
+                form.addEventListener('submit', e => {
+                    if (getCounts().remaining <= 0) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                    }
+                }, true);
+
+                // инкремент по клику
+                btn.addEventListener('click', () => {
+                    const cnt = getCounts();
+                    if (cnt.remaining > 0) {
+                        writeGMNumber(keyMessageCount, cnt.sent + 1);
+                        refresh();
+                    }
+                }, true);
+
+                // инкремент по Enter
+                ta.addEventListener('keydown', e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        setTimeout(() => {
+                            const cnt = getCounts();
+                            if (cnt.remaining > 0) {
+                                writeGMNumber(keyMessageCount, cnt.sent + 1);
+                                refresh();
+                            }
+                        }, 50);
+                    }
+                });
+
+                form.dataset.msgCtrlInit = '1';
+            }
+
+            // 4) Постоянный опрос (не останавливаемся), ищем обе формы
+            setInterval(() => {
+                // Lichess — диалоги в мессенджере
+                initFormControl(document.querySelector('.msg-app__convo__post'));
+                // Форум — форма ответа
+                initFormControl(document.querySelector('form.form3.reply'));
+            }, 300);
         })();
     }
-
-// === БЛОК 8: контроль отправки задач и динамическая блокировка при переключении диалогов ===
-if (enableMessageControl) {
-  (function() {
-    // 0) URL-гвард: отработаем только на нужных страницах
-    const path   = location.pathname;
-    const isInbox = path.startsWith('/inbox/');
-    const isForum = /^\/forum\/team-[^\/]+\/[^\/]+/.test(path);
-    if (!isInbox && !isForum) return;
-
-    // 1) GM-ключи
-    const dateKey         = getTodayDateString();
-    const keyDailyCount   = `daily_solved_${courseId}_${dateKey}`;
-    const keyMessageCount = `messages_sent_${courseId}_${dateKey}`;
-    const tasksPerMsg     = tasksPerMessage;
-    if (readGMNumber(keyMessageCount) === null) {
-      writeGMNumber(keyMessageCount, 0);
-    }
-
-    // 2) Подсчёт
-    function getCounts() {
-      const solved    = readGMNumber(keyDailyCount)   || 0;
-      const sent      = readGMNumber(keyMessageCount) || 0;
-      const allowed   = Math.floor(solved / tasksPerMsg);
-      const remaining = allowed - sent;
-      return { solved, allowed, sent, remaining };
-    }
-
-    // 3) Инициализация формы
-    function initFormControl(form) {
-      if (!form || form.dataset.msgCtrlInit) return;
-      const ta  = form.querySelector('textarea');
-      const btn = form.querySelector('button[type="submit"]');
-      if (!ta || !btn) return;
-
-      // создаём индикатор рядом с textarea
-      const info = document.createElement('div');
-      info.style.cssText = 'font-size:12px;color:#c00;margin-top:4px;margin-left:4px;';
-      ta.parentNode.insertBefore(info, ta.nextSibling);
-
-      // обновление состояния
-      function refresh() {
-        const { solved, allowed, sent, remaining } = getCounts();
-        const tasksToNext = tasksPerMsg - (solved % tasksPerMsg);
-        ta.disabled  = remaining <= 0;
-        btn.disabled = remaining <= 0;
-        info.textContent = remaining > 0
-          ? `Доступно ${remaining}/${allowed} сообщений`
-          : `Доступно 0. Решите ещё ${tasksToNext} задач`;
-      }
-      refresh();
-
-      // блокировка сабмита
-      form.addEventListener('submit', e => {
-        if (getCounts().remaining <= 0) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-        }
-      }, true);
-
-      // инкремент по клику
-      btn.addEventListener('click', () => {
-        const cnt = getCounts();
-        if (cnt.remaining > 0) {
-          writeGMNumber(keyMessageCount, cnt.sent + 1);
-          refresh();
-        }
-      }, true);
-
-      // инкремент по Enter
-      ta.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          setTimeout(() => {
-            const cnt = getCounts();
-            if (cnt.remaining > 0) {
-              writeGMNumber(keyMessageCount, cnt.sent + 1);
-              refresh();
-            }
-          }, 50);
-        }
-      });
-
-      form.dataset.msgCtrlInit = '1';
-    }
-
-    // 4) Постоянный опрос (не останавливаемся), ищем обе формы
-    setInterval(() => {
-      // Lichess — диалоги в мессенджере
-      initFormControl(document.querySelector('.msg-app__convo__post'));
-      // Форум — форма ответа
-      initFormControl(document.querySelector('form.form3.reply'));
-    }, 300);
-  })();
-}
 })();
 
 
