@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.8.7
+// @version      4.8.8
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -584,7 +584,7 @@
             }
 
             // Запускаем fetchAndUpdate сразу и затем по таймеру
-            fetchAndUpdate();
+            fetchAndUpdate()
             setInterval(fetchAndUpdate, 60000);
         }
     }
