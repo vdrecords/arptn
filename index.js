@@ -583,7 +583,6 @@
                             return jQuery.Deferred().resolve().promise();
                         };
                     }
-                    console.log("[Anim] jQuery.animate/fade переопределены");
                 }
             }
 
@@ -603,16 +602,12 @@
             function autoClickNextButton() {
                 document.querySelectorAll("a.btn.btn-primary").forEach(btn => {
                     if (btn.textContent.trim() === "Следующее задание" && isElementVisible(btn)) {
-                        console.log("[Anim] Клик по «Следующее задание»");
                         btn.click();
                     }
                 });
             }
             function setupObserver() {
-                const observer = new MutationObserver(() => {
-                    console.log("[Anim] MutationObserver: проверка «Следующее задание»");
-                    autoClickNextButton();
-                });
+                const observer = new MutationObserver(autoClickNextButton);
                 if (document.body) {
                     observer.observe(document.body, { childList: true, subtree: true });
                 }
@@ -979,38 +974,25 @@
                            pathname.includes(`/learning/course/${courseId}/tasks`);
         
         if (isCoursePage || isTasksPage) {
-            console.log(`[Tracker] Мы на ${isTasksPage ? 'странице задач' : 'странице курса'}, инициализируем UI`);
+            console.log(`[Tracker] Инициализация UI на ${isTasksPage ? 'странице задач' : 'странице курса'}`);
             
             // Ждём загрузки DOM
             function initUI() {
                 // Проверяем наличие buildUIandStartUpdates
                 if (typeof window.buildUIandStartUpdates !== 'function') {
-                    console.log("[Tracker] buildUIandStartUpdates не найден, ожидаем...");
                     setTimeout(initUI, 100);
                     return;
                 }
 
-                console.log("[Tracker] buildUIandStartUpdates доступен, запускаем UI");
                 window.buildUIandStartUpdates();
             }
             
             // Запускаем инициализацию в зависимости от состояния загрузки страницы
-            if (document.readyState === 'complete') {
-                console.log("[Tracker] Страница уже загружена, запускаем initUI");
-                initUI();
-            } else if (document.readyState === 'interactive') {
-                console.log("[Tracker] DOM загружен, но ресурсы еще загружаются, запускаем initUI");
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
                 initUI();
             } else {
-                console.log("[Tracker] Ждем загрузки DOM");
-                document.addEventListener('DOMContentLoaded', () => {
-                    console.log("[Tracker] DOMContentLoaded сработал, запускаем initUI");
-                    initUI();
-                });
-                window.addEventListener('load', () => {
-                    console.log("[Tracker] load сработал, запускаем initUI");
-                    initUI();
-                });
+                document.addEventListener('DOMContentLoaded', initUI);
+                window.addEventListener('load', initUI);
             }
         }
     })();
