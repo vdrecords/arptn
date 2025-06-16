@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.20
+// @version      4.9.21
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -327,16 +327,20 @@
                 if (!overlay) {
                     overlay = document.createElement('div');
                     overlay.id = 'ck-progress-overlay';
-                    overlay.style.position = 'fixed';
-                    overlay.style.top = '10px';
-                    overlay.style.right = '10px';
-                    overlay.style.backgroundColor = 'white';
-                    overlay.style.border = '1px solid #ccc';
-                    overlay.style.padding = '10px';
-                    overlay.style.zIndex = '2147483647';
-                    overlay.style.fontFamily = 'Arial, sans-serif';
-                    overlay.style.fontSize = '12px';
-                    overlay.style.color = '#000';
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 10px;
+                        right: 10px;
+                        background-color: white;
+                        border: 1px solid #ccc;
+                        padding: 10px;
+                        z-index: 2147483647;
+                        font-family: Arial, sans-serif;
+                        font-size: 12px;
+                        color: #000;
+                        border-radius: 4px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    `;
                     overlay.innerHTML = '<strong>Прогресс задач&nbsp;(разница за минуту)</strong><br/>';
 
                     const contentDiv = document.createElement('div');
@@ -350,7 +354,7 @@
 
                     const metricsDiv = document.createElement('div');
                     metricsDiv.id = 'ck-progress-metrics';
-                    metricsDiv.style.marginTop = '0px';
+                    metricsDiv.style.marginTop = '10px';
                     contentDiv.appendChild(metricsDiv);
 
                     overlay.appendChild(contentDiv);
@@ -359,11 +363,17 @@
                     const toggleBtn = document.createElement('button');
                     toggleBtn.id = 'ck-toggle-btn';
                     toggleBtn.textContent = 'Свернуть';
-                    toggleBtn.style.position = 'absolute';
-                    toggleBtn.style.top = '2px';
-                    toggleBtn.style.right = '2px';
-                    toggleBtn.style.fontSize = '10px';
-                    toggleBtn.style.padding = '2px 5px';
+                    toggleBtn.style.cssText = `
+                        position: absolute;
+                        top: 2px;
+                        right: 2px;
+                        font-size: 10px;
+                        padding: 2px 5px;
+                        background: #f0f0f0;
+                        border: 1px solid #ccc;
+                        border-radius: 2px;
+                        cursor: pointer;
+                    `;
                     overlay.appendChild(toggleBtn);
                     toggleBtn.addEventListener('click', () => {
                         const cd = document.getElementById('ck-progress-content');
@@ -625,8 +635,7 @@
         // 2) Если мы на /tasks: ждём DOMContentLoaded → DOM-инициализация кеша + автообновление + UI
         // --------------------------------------------
         if (isTasksPage) {
-            console.log("[Tracker] На /tasks → скрываем body и ждём DOMContentLoaded");
-            if (document.body) document.body.style.visibility = 'hidden';
+            console.log("[Tracker] На /tasks → ждём DOMContentLoaded");
 
             function onTasksPageLoad() {
                 console.log("[Tracker] DOMContentLoaded на /tasks");
@@ -662,17 +671,15 @@
                 // Сразу синхронизируем кеш из DOM
                 syncCacheFromDOM();
 
-                // 2.2) Показываем <body>
-                if (document.body) document.body.style.visibility = '';
-
-                // 2.3) Запускаем каждую секунду проверку DOM → синхронизируем кеш
+                // 2.2) Запускаем каждую секунду проверку DOM → синхронизируем кеш
                 console.log("[Tracker] Запускаем интервал каждые 1 сек для синхронизации кеша из DOM");
                 setInterval(syncCacheFromDOM, 1000);
 
-                // 2.4) Строим UI + запускаем fetchAndUpdate
+                // 2.3) Строим UI + запускаем fetchAndUpdate
                 window.buildUIandStartUpdates();
             }
 
+            // Запускаем инициализацию в зависимости от состояния загрузки страницы
             if (document.readyState === 'interactive' || document.readyState === 'complete') {
                 onTasksPageLoad();
             } else {
@@ -1171,19 +1178,26 @@
                 if (!overlay) {
                     overlay = document.createElement('div');
                     overlay.id = 'ck-time-overlay';
-                    overlay.style.position = 'fixed';
-                    overlay.style.top = '10px';
-                    overlay.style.right = '10px';
-                    overlay.style.backgroundColor = 'white';
-                    overlay.style.border = '1px solid #ccc';
-                    overlay.style.padding = '10px';
-                    overlay.style.zIndex = '2147483647';
-                    overlay.style.fontFamily = 'Arial, sans-serif';
-                    overlay.style.fontSize = '12px';
-                    overlay.style.color = '#000';
+                    overlay.style.cssText = `
+                        position: fixed;
+                        top: 10px;
+                        left: 10px;
+                        background-color: white;
+                        border: 1px solid #ccc;
+                        padding: 10px;
+                        z-index: 2147483647;
+                        font-family: Arial, sans-serif;
+                        font-size: 12px;
+                        color: #000;
+                        border-radius: 4px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    `;
                     document.body.appendChild(overlay);
                 }
-                overlay.innerHTML = `<strong>Оставшееся время:</strong><br/>${formatTime(minutes)}`;
+                overlay.innerHTML = `
+                    <div style="font-weight: bold; margin-bottom: 5px;">Оставшееся время:</div>
+                    <div style="font-size: 16px; color: #c00;">${formatTime(minutes)}</div>
+                `;
             }
 
             // Функция для очистки body
