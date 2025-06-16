@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.19
+// @version      4.9.20
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -159,6 +159,68 @@
     window.buildUIandStartUpdates = function() {
         console.log("[Tracker] buildUIandStartUpdates: строим UI и запускаем fetchAndUpdate()");
 
+        // Функция для получения статистики из DOM
+        function getStatsFromDOM() {
+            const solvedElem = document.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
+            if (!solvedElem) {
+                console.log("[Tracker][getStatsFromDOM] Элемент статистики не найден");
+                return null;
+            }
+
+            const parts = solvedElem.innerText.split('/');
+            if (parts.length !== 2) {
+                console.log("[Tracker][getStatsFromDOM] Неверный формат данных");
+                return null;
+            }
+
+            const solved = parseInt(parts[0].trim(), 10);
+            const total = parseInt(parts[1].trim(), 10);
+
+            if (isNaN(solved) || isNaN(total)) {
+                console.log("[Tracker][getStatsFromDOM] Ошибка парсинга чисел");
+                return null;
+            }
+
+            return {
+                solved,
+                total,
+                remaining: total - solved,
+                progress: Math.round((solved / total) * 100)
+            };
+        }
+
+        // Функция для создания блока статистики
+        function createStatsBlock(stats) {
+            let statsDiv = document.getElementById('ck-course-stats');
+            if (!statsDiv) {
+                statsDiv = document.createElement('div');
+                statsDiv.id = 'ck-course-stats';
+                statsDiv.style.cssText = `
+                    position: fixed;
+                    top: 10px;
+                    left: 10px;
+                    background-color: white;
+                    border: 1px solid #ccc;
+                    padding: 10px;
+                    z-index: 2147483647;
+                    font-family: Arial, sans-serif;
+                    font-size: 14px;
+                    color: #000;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                `;
+                document.body.appendChild(statsDiv);
+            }
+
+            statsDiv.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">Статистика курса:</div>
+                <div>Решено задач: <strong>${stats.solved}</strong></div>
+                <div>Всего задач: <strong>${stats.total}</strong></div>
+                <div>Осталось решить: <strong>${stats.remaining}</strong></div>
+                <div>Прогресс: <strong>${stats.progress}%</strong></div>
+            `;
+        }
+
         function fetchAndUpdate() {
             console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
             window.fetchCourseDataViaGM(true).then(data => {
@@ -174,6 +236,9 @@
                     console.log("[Tracker][fetchAndUpdate] Не удалось получить статистику из DOM");
                     return;
                 }
+
+                // Создаем или обновляем блок статистики
+                createStatsBlock(stats);
 
                 // ==== Обновляем <title> ====
                 const oldTitle = document.title.replace(/^\d+\s·\s/, '');
