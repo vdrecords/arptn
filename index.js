@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.15
+// @version      4.9.16
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -651,13 +651,30 @@
                 writeGMNumber(keyCachedSolved, solvedToday);
                 writeGMNumber(keyCachedUnlock, unlockRemaining);
                 console.log(`[Tracker] После fetch: solvedToday=${solvedToday}, unlockRemaining=${unlockRemaining}`);
-                if (unlockRemaining > 0) {
-                    console.log("[Tracker] unlockRemaining > 0 → редиректим на /tasks");
-                    window.location.replace(tasksHashURL);
-                } else {
-                    console.log("[Tracker] unlockRemaining = 0 → показываем страницу");
-                    if (document.body) document.body.style.visibility = '';
-                }
+                
+                // Получаем общую статистику курса
+                fetchCourseStats().then(stats => {
+                    if (stats) {
+                        const { solved, total } = stats;
+                        const remainingTasks = total - solved;
+                        
+                        // Если есть нерешенные задачи, показываем страницу
+                        if (remainingTasks > 0) {
+                            console.log(`[Tracker] Осталось ${remainingTasks} задач → показываем страницу`);
+                            if (document.body) document.body.style.visibility = '';
+                        } else if (unlockRemaining > 0) {
+                            console.log("[Tracker] unlockRemaining > 0 → редиректим на /tasks");
+                            window.location.replace(tasksHashURL);
+                        } else {
+                            console.log("[Tracker] unlockRemaining = 0 → показываем страницу");
+                            if (document.body) document.body.style.visibility = '';
+                        }
+                    } else {
+                        // Если не удалось получить статистику, показываем страницу
+                        console.log("[Tracker] Не удалось получить статистику → показываем страницу");
+                        if (document.body) document.body.style.visibility = '';
+                    }
+                });
             });
             return;
         }
