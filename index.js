@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.12
+// @version      4.9.13
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -28,8 +28,8 @@
     // === Общие настройки скрипта ===
     // ==============================
     const courseId            = 22;     // ID курса на ChessKing
-    let   minTasksPerDay      = 0;      // Минимум задач в день
-    const maxTimePerDay       = 180;    // Максимальное время в минутах (3 часа)
+    let   minTasksPerDay      = 1000;      // Минимум задач в день
+    const maxTimePerDay       = 240;    // Максимальное время в минутах (3 часа)
     const dailyTimeLimit      = {       // Ежедневный лимит времени
         hour: 21,
         minute: 30
