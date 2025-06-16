@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.17
+// @version      4.9.18
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -191,107 +191,42 @@
 
         // Функция для обновления статистики на странице
         function updateCourseStats() {
-            // Сначала проверяем существующий блок статистики
-            const existingStats = document.getElementById('ck-course-stats');
-            if (existingStats) {
-                const stats = {
-                    solved: parseInt(existingStats.querySelector('div:nth-child(2) strong').textContent),
-                    total: parseInt(existingStats.querySelector('div:nth-child(3) strong').textContent)
-                };
-                
-                // Обновляем наш оверлей с этими данными
-                updateOverlayWithStats(stats);
-                return;
-            }
-
-            // Если блока нет, делаем запрос
             fetchCourseStats().then(stats => {
                 if (stats) {
-                    updateOverlayWithStats(stats);
+                    const { solved, total } = stats;
+                    const remaining = total - solved;
+                    
+                    // Добавляем или обновляем элемент со статистикой
+                    let statsDiv = document.getElementById('ck-course-stats');
+                    if (!statsDiv) {
+                        statsDiv = document.createElement('div');
+                        statsDiv.id = 'ck-course-stats';
+                        statsDiv.style.cssText = `
+                            position: fixed;
+                            top: 10px;
+                            left: 10px;
+                            background-color: white;
+                            border: 1px solid #ccc;
+                            padding: 10px;
+                            z-index: 2147483647;
+                            font-family: Arial, sans-serif;
+                            font-size: 14px;
+                            color: #000;
+                            border-radius: 4px;
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        `;
+                        document.body.appendChild(statsDiv);
+                    }
+                    
+                    statsDiv.innerHTML = `
+                        <div style="font-weight: bold; margin-bottom: 5px;">Статистика курса:</div>
+                        <div>Решено задач: <strong>${solved}</strong></div>
+                        <div>Всего задач: <strong>${total}</strong></div>
+                        <div>Осталось решить: <strong>${remaining}</strong></div>
+                        <div>Прогресс: <strong>${Math.round((solved / total) * 100)}%</strong></div>
+                    `;
                 }
             });
-        }
-
-        // Функция для обновления оверлея с данными статистики
-        function updateOverlayWithStats(stats) {
-            const { solved, total } = stats;
-            const remaining = total - solved;
-            const progress = Math.round((solved / total) * 100);
-            
-            // Получаем данные о скорости из localStorage
-            let readings = [];
-            try {
-                readings = JSON.parse(localStorage.getItem('ck_readings') || '[]');
-            } catch {
-                readings = [];
-            }
-
-            // Вычисляем среднюю скорость
-            let avgPerMin = 0;
-            if (readings.length > 0) {
-                const diffs = [];
-                for (let i = 1; i < readings.length; i++) {
-                    const t0 = new Date(readings[i - 1].time).getTime();
-                    const t1 = new Date(readings[i].time).getTime();
-                    if (t1 - t0 <= 90000) {
-                        diffs.push(readings[i].solved - readings[i - 1].solved);
-                    }
-                }
-                
-                let lastTen = diffs.length > 10 ? diffs.slice(-10) : diffs;
-                const filtered = lastTen.filter((x, i, arr) => !(x === 0 && i > 0 && arr[i - 1] === 0));
-                
-                if (filtered.length) {
-                    const sorted = [...filtered].sort((a, b) => a - b);
-                    const mid = Math.floor(sorted.length / 2);
-                    avgPerMin = (sorted.length % 2)
-                        ? sorted[mid]
-                        : (sorted[mid - 1] + sorted[mid]) / 2;
-                    avgPerMin = Math.round(avgPerMin);
-                }
-            }
-
-            // Вычисляем оставшееся время
-            let remainingTimeText = "нет данных";
-            if (avgPerMin > 0) {
-                const minsLeft = remaining / avgPerMin;
-                const h = Math.floor(minsLeft / 60);
-                const m = Math.round(minsLeft % 60);
-                remainingTimeText = `${h} ч ${m} мин`;
-            }
-
-            // Обновляем или создаем оверлей
-            let overlay = document.getElementById('ck-progress-overlay');
-            if (!overlay) {
-                overlay = document.createElement('div');
-                overlay.id = 'ck-progress-overlay';
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 10px;
-                    right: 10px;
-                    background-color: white;
-                    border: 1px solid #ccc;
-                    padding: 10px;
-                    z-index: 2147483647;
-                    font-family: Arial, sans-serif;
-                    font-size: 12px;
-                    color: #000;
-                    border-radius: 4px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                `;
-                document.body.appendChild(overlay);
-            }
-
-            // Обновляем содержимое оверлея
-            overlay.innerHTML = `
-                <div style="font-weight: bold; margin-bottom: 5px;">Прогресс задач:</div>
-                <div>Решено задач: <strong>${solved}</strong></div>
-                <div>Всего задач: <strong>${total}</strong></div>
-                <div>Осталось решить: <strong>${remaining}</strong></div>
-                <div>Прогресс: <strong>${progress}%</strong></div>
-                <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
-                <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
-            `;
         }
 
         // Запускаем обновление статистики сразу и затем каждые 5 минут
@@ -345,6 +280,24 @@
             }, 30000);
         }
 
+        // Функция для получения статистики из DOM
+        function getStatsFromDOM() {
+            const statsDiv = document.getElementById('ck-course-stats');
+            if (!statsDiv) return null;
+
+            const solvedText = statsDiv.querySelector('div:nth-child(2) strong').textContent;
+            const totalText = statsDiv.querySelector('div:nth-child(3) strong').textContent;
+            const remainingText = statsDiv.querySelector('div:nth-child(4) strong').textContent;
+            const progressText = statsDiv.querySelector('div:nth-child(5) strong').textContent;
+
+            return {
+                solved: parseInt(solvedText, 10),
+                total: parseInt(totalText, 10),
+                remaining: parseInt(remainingText, 10),
+                progress: parseInt(progressText, 10)
+            };
+        }
+
         function fetchAndUpdate() {
             console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
             window.fetchCourseDataViaGM(true).then(data => {
@@ -354,18 +307,12 @@
                 }
                 const { totalSolved, solvedToday, unlockRemaining } = data;
 
-                // Проверяем, нужно ли показать подбадривающее сообщение
-                if (solvedToday > 0 && solvedToday % 50 === 0) {
-                    // Обновляем страницу перед показом сообщения
-                    window.fetchCourseDataViaGM(true).then(() => {
-                        showEncouragingMessage();
-                    });
+                // Получаем статистику из DOM
+                const stats = getStatsFromDOM();
+                if (!stats) {
+                    console.log("[Tracker][fetchAndUpdate] Не удалось получить статистику из DOM");
+                    return;
                 }
-
-                // Обновляем кеш (fetch-based)
-                writeGMNumber(keyCachedSolved, solvedToday);
-                writeGMNumber(keyCachedUnlock, unlockRemaining);
-                console.log(`[Tracker][fetchAndUpdate] Фетч: totalSolved=${totalSolved}, solvedToday=${solvedToday}, unlockRemaining=${unlockRemaining}`);
 
                 // ==== Обновляем <title> ====
                 const oldTitle = document.title.replace(/^\d+\s·\s/, '');
@@ -379,7 +326,7 @@
                 } catch {
                     readings = [];
                 }
-                readings.push({ time: new Date().toISOString(), solved: totalSolved });
+                readings.push({ time: new Date().toISOString(), solved: stats.solved });
                 if (readings.length > 60) readings = readings.slice(-60);
                 localStorage.setItem('ck_readings', JSON.stringify(readings));
                 console.log(`[Tracker][fetchAndUpdate] Добавили чтение: time=${readings.slice(-1)[0].time}, solved=${readings.slice(-1)[0].solved}`);
@@ -427,23 +374,17 @@
                 }
                 console.log(`[Tracker][fetchAndUpdate] maxPerMin=${maxPerMin}`);
 
-                // ==== Общее число задач и оставшиеся задачи ====
-                const domData = readSolvedCountFromDOM();
-                const totalTasks = domData ? domData.total : readGMNumber(GM_KEYS.TOTAL_TASKS) || 0;
-                const remainingTasks = Math.max(0, totalTasks - totalSolved);
-                console.log(`[Tracker][fetchAndUpdate] totalTasks=${totalTasks}, remainingTasks=${remainingTasks}`);
-
                 let remainingTimeText = "нет данных";
                 if (maxPerMin > 0) {
-                    const minsLeft = remainingTasks / maxPerMin;
+                    const minsLeft = stats.remaining / maxPerMin;
                     const h = Math.floor(minsLeft / 60);
                     const m = Math.round(minsLeft % 60);
                     remainingTimeText = `${h} ч ${m} мин`;
                 }
                 console.log(`[Tracker][fetchAndUpdate] remainingTimeText="${remainingTimeText}"`);
 
-                const nextTh = Math.ceil(totalSolved / 1000) * 1000;
-                const toNext = nextTh - totalSolved;
+                const nextTh = Math.ceil(stats.solved / 1000) * 1000;
+                const toNext = nextTh - stats.solved;
                 let milestoneText = "нет данных";
                 if (maxPerMin > 0) {
                     const m2 = toNext / maxPerMin;
@@ -565,9 +506,18 @@
                     <div>До разблокировки осталось решить: <strong>${unlockRemaining}</strong></div>
                     <div>Средняя скорость: <strong>${avgPerMin}</strong> задач/мин</div>
                     <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
-                    <div>Задач осталось: <strong>${remainingTasks}</strong></div>
+                    <div>Задач осталось: <strong>${stats.remaining}</strong></div>
+                    <div>Общий прогресс: <strong>${stats.progress}%</strong></div>
                 `;
                 console.log("[Tracker] UI обновлён");
+
+                // Проверяем, нужно ли показать подбадривающее сообщение
+                if (solvedToday > 0 && solvedToday % 50 === 0) {
+                    // Обновляем страницу перед показом сообщения
+                    window.fetchCourseDataViaGM(true).then(() => {
+                        showEncouragingMessage();
+                    });
+                }
             });
         }
 
