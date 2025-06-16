@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ARPTn
 // @namespace    http://tampermonkey.net/
-// @version      4.9.18
+// @version      4.9.19
 // @description
 // 1) Блок 1: Глобальная проверка «До разблокировки осталось решить».
 // 2) Блок 2: Мгновенные анимации ChessKing – переопределение jQuery.animate/fadeIn/fadeOut, авто-клик «Следующее задание».
@@ -158,145 +158,6 @@
     // =================================
     window.buildUIandStartUpdates = function() {
         console.log("[Tracker] buildUIandStartUpdates: строим UI и запускаем fetchAndUpdate()");
-
-        // Функция для получения статистики курса
-        function fetchCourseStats() {
-            return new Promise((resolve) => {
-                GM_xmlhttpRequest({
-                    method: 'GET',
-                    url: coursePageBase,
-                    onload(response) {
-                        if (response.status === 200) {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(response.responseText, 'text/html');
-                            const statsElem = doc.querySelector('span.course-overview__stats-item[title*="Решенное"] span');
-                            if (statsElem) {
-                                const match = statsElem.innerText.match(/(\d+)\s*\/\s*(\d+)/);
-                                if (match) {
-                                    const solved = parseInt(match[1], 10);
-                                    const total = parseInt(match[2], 10);
-                                    resolve({ solved, total });
-                                    return;
-                                }
-                            }
-                        }
-                        resolve(null);
-                    },
-                    onerror() {
-                        resolve(null);
-                    }
-                });
-            });
-        }
-
-        // Функция для обновления статистики на странице
-        function updateCourseStats() {
-            fetchCourseStats().then(stats => {
-                if (stats) {
-                    const { solved, total } = stats;
-                    const remaining = total - solved;
-                    
-                    // Добавляем или обновляем элемент со статистикой
-                    let statsDiv = document.getElementById('ck-course-stats');
-                    if (!statsDiv) {
-                        statsDiv = document.createElement('div');
-                        statsDiv.id = 'ck-course-stats';
-                        statsDiv.style.cssText = `
-                            position: fixed;
-                            top: 10px;
-                            left: 10px;
-                            background-color: white;
-                            border: 1px solid #ccc;
-                            padding: 10px;
-                            z-index: 2147483647;
-                            font-family: Arial, sans-serif;
-                            font-size: 14px;
-                            color: #000;
-                            border-radius: 4px;
-                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                        `;
-                        document.body.appendChild(statsDiv);
-                    }
-                    
-                    statsDiv.innerHTML = `
-                        <div style="font-weight: bold; margin-bottom: 5px;">Статистика курса:</div>
-                        <div>Решено задач: <strong>${solved}</strong></div>
-                        <div>Всего задач: <strong>${total}</strong></div>
-                        <div>Осталось решить: <strong>${remaining}</strong></div>
-                        <div>Прогресс: <strong>${Math.round((solved / total) * 100)}%</strong></div>
-                    `;
-                }
-            });
-        }
-
-        // Запускаем обновление статистики сразу и затем каждые 5 минут
-        updateCourseStats();
-        setInterval(updateCourseStats, 300000);
-
-        // Функция для показа подбадривающего сообщения
-        function showEncouragingMessage() {
-            // Удаляем предыдущее сообщение, если оно есть
-            const existingMessage = document.getElementById('ck-encouraging-message');
-            if (existingMessage) {
-                existingMessage.remove();
-            }
-
-            const phrase = encouragingPhrases[Math.floor(Math.random() * encouragingPhrases.length)];
-            const messageDiv = document.createElement('div');
-            messageDiv.id = 'ck-encouraging-message';
-            messageDiv.style.cssText = `
-                position: fixed;
-                top: 80px;
-                left: 50%;
-                transform: translateX(-50%);
-                font-size: 18px;
-                color: #2196F3;
-                text-align: center;
-                opacity: 0;
-                transition: opacity 0.5s ease-in-out;
-                font-weight: bold;
-                text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-                background-color: rgba(255, 255, 255, 0.9);
-                padding: 10px 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                z-index: 2147483647;
-            `;
-            messageDiv.textContent = phrase;
-            
-            document.body.appendChild(messageDiv);
-            
-            // Показываем сообщение с анимацией
-            setTimeout(() => {
-                messageDiv.style.opacity = '1';
-            }, 100);
-
-            // Удаляем сообщение через 30 секунд
-            setTimeout(() => {
-                messageDiv.style.opacity = '0';
-                setTimeout(() => {
-                    messageDiv.remove();
-                }, 500);
-            }, 30000);
-        }
-
-        // Функция для получения статистики из DOM
-        function getStatsFromDOM() {
-            const statsDiv = document.getElementById('ck-course-stats');
-            if (!statsDiv) return null;
-
-            const solvedText = statsDiv.querySelector('div:nth-child(2) strong').textContent;
-            const totalText = statsDiv.querySelector('div:nth-child(3) strong').textContent;
-            const remainingText = statsDiv.querySelector('div:nth-child(4) strong').textContent;
-            const progressText = statsDiv.querySelector('div:nth-child(5) strong').textContent;
-
-            return {
-                solved: parseInt(solvedText, 10),
-                total: parseInt(totalText, 10),
-                remaining: parseInt(remainingText, 10),
-                progress: parseInt(progressText, 10)
-            };
-        }
 
         function fetchAndUpdate() {
             console.log("[Tracker][fetchAndUpdate] Запуск fetch + обновление UI");
@@ -508,6 +369,7 @@
                     <div>Оставшееся время: <strong>${remainingTimeText}</strong></div>
                     <div>Задач осталось: <strong>${stats.remaining}</strong></div>
                     <div>Общий прогресс: <strong>${stats.progress}%</strong></div>
+                    <div>До ${nextTh} решённых задач осталось: <strong>${milestoneText}</strong></div>
                 `;
                 console.log("[Tracker] UI обновлён");
 
@@ -521,7 +383,7 @@
             });
         }
 
-        // Запускаем fetchAndUpdate сразу и затем по таймеру
+        // Запускаем fetchAndUpdate сразу и затем по таймеру каждую минуту
         fetchAndUpdate();
         setInterval(fetchAndUpdate, 60000);
     };
